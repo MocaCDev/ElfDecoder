@@ -5,28 +5,28 @@
 #include <cstring>
 #include <stdint.h>
 
-#define ELF_MAGIC_NUMBER        0x7F454C46
-#define ELF_CURRENT_VERSION     0x01
+#define ELF_MAGIC_NUMBER        	0x7F454C46
+#define ELF_CURRENT_VERSION     	0x01
 
 /* Structure sizes, per the spec. */
 #define ELF_HEADER_SIZE			0x34
-#define ELF_PROGRAM_HEADER_SIZE	0x20
-#define ELF_SECTION_HEADER_SIZE	0x28
+#define ELF_PROGRAM_HEADER_SIZE		0x20
+#define ELF_SECTION_HEADER_SIZE		0x28
 
 #ifdef NULL
 #undef NULL
 #endif
 
-#define NULL			(uint8_t) 0
+#define NULL				(uint8_t) 0
 
 #define ELF_ASSERT(cond, msg, ...)              \
-if(!(cond))										\
-{												\
-	fprintf(stderr, msg, ##__VA_ARGS__);		\
-	exit(EXIT_FAILURE);							\
+if(!(cond))					\
+{						\
+	fprintf(stderr, msg, ##__VA_ARGS__);	\
+	exit(EXIT_FAILURE);			\
 }
 
-#define ELF_LOG(msg, ...)						\
+#define ELF_LOG(msg, ...)			\
 	fprintf(stdout, msg, ##__VA_ARGS__);
 
 namespace ELF_DECODER
