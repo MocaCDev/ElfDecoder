@@ -8,7 +8,7 @@ int main(int args, char *argv[])
 	
 	ElfHeader *eheader = new ElfHeader(f);
 
-	eheader->ELF_get_data(4, ELF_parts::ELF_Header);
+	eheader->get_elf_header();
 
 	delete eheader;
 

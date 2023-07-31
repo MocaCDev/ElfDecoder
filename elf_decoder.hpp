@@ -8,6 +8,11 @@
 #define ELF_MAGIC_NUMBER        0x7F454C46
 #define ELF_CURRENT_VERSION     0x01
 
+/* Structure sizes, per the spec. */
+#define ELF_HEADER_SIZE			0x34
+#define ELF_PROGRAM_HEADER_SIZE	0x20
+#define ELF_SECTION_HEADER_SIZE	0x28
+
 #ifdef NULL
 #undef NULL
 #endif
@@ -15,11 +20,14 @@
 #define NULL			(uint8_t) 0
 
 #define ELF_ASSERT(cond, msg, ...)              \
-if(!(cond))					\
-{						\
-	fprintf(stderr, msg, ##__VA_ARGS__);	\
-	exit(EXIT_FAILURE);			\
+if(!(cond))										\
+{												\
+	fprintf(stderr, msg, ##__VA_ARGS__);		\
+	exit(EXIT_FAILURE);							\
 }
+
+#define ELF_LOG(msg, ...)						\
+	fprintf(stdout, msg, ##__VA_ARGS__);
 
 namespace ELF_DECODER
 {
@@ -30,12 +38,36 @@ namespace ELF_DECODER
 		ELF64	= 0x2
 	};
 
+	static uint8_t *get_ELF_type_name(ELF_types elf_type)
+	{
+		switch(elf_type)
+		{
+			case ELF_types::ELF32: return (uint8_t *) "32-bit";break;
+			case ELF_types::ELF64: return (uint8_t *) "64-bit";break;
+			default: break;
+		}
+
+		return (uint8_t *) "Unknown Type";
+	}
+
 	enum class ELF_endianess: uint8_t
 	{
 		InvalidE	= 0x0,
 		LittleE		= 0x1,
 		BigE		= 0x2
 	};
+
+	static uint8_t *get_ELF_endianess_name(ELF_endianess endianess)
+	{
+		switch(endianess)
+		{
+			case ELF_endianess::LittleE: return (uint8_t *) "Little Endian";break;
+			case ELF_endianess::BigE: return (uint8_t *) "Big Endian";break;
+			default: break;
+		}
+
+		return (uint8_t *) "Unknown Endianess";
+	}
 
 	enum class ELF_file_types: uint16_t
 	{
@@ -48,6 +80,23 @@ namespace ELF_DECODER
 		PSFileType2	= 0xFFFF	/* Processor-specific File (indicator 2) */
 	};
 
+	static uint8_t *get_ELF_file_type_name(ELF_file_types file_type)
+	{
+		switch(file_type)
+		{
+			case ELF_file_types::NoFileType: return (uint8_t *) "No File Type";break;
+			case ELF_file_types::RFileType:  return (uint8_t *) "Relocatable File";break;
+			case ELF_file_types::EFileType:  return (uint8_t *) "Executable File";break;
+			case ELF_file_types::SOFileType: return (uint8_t *) "Shared Object File";break;
+			case ELF_file_types::CFileType:  return (uint8_t *) "Core File";break;
+			case ELF_file_types::PSFileType1:return (uint8_t *) "Processor-specific File (indicator 1)";break;
+			case ELF_file_types::PSFileType2:return (uint8_t *) "Processor-specific File (indicator 2)";break;
+			default: break;
+		}
+
+		return (uint8_t *) "Unknown File Type";
+	}
+
 	enum class ELF_machine_types: uint8_t
 	{
 		NoMachine	= 0x0,
@@ -59,6 +108,24 @@ namespace ELF_DECODER
 		Intel80860	= 0x6,
 		MIPS_RS3000	= 0x8
 	};
+
+	static uint8_t *get_ELF_machine_type_name(ELF_machine_types machine_type)
+	{
+		switch(machine_type)
+		{
+			case ELF_machine_types::NoMachine: return (uint8_t *) "No Machine";break;
+			case ELF_machine_types::ATT_WE_32100: return (uint8_t *) "ATT WE 32100";break;
+			case ELF_machine_types::SPARC: return (uint8_t *) "SPARC";break;
+			case ELF_machine_types::Intel80386: return (uint8_t *) "Intel 80386";break;
+			case ELF_machine_types::Mot68000: return (uint8_t *) "Mot 68000";break;
+			case ELF_machine_types::Mot88000: return (uint8_t *) "Mot 88000";break;
+			case ELF_machine_types::Intel80860: return (uint8_t *) "Intel 80860";break;
+			case ELF_machine_types::MIPS_RS3000: return (uint8_t *) "MIPS RS3000";break;
+			default: break;
+		}
+
+		return (uint8_t *) "Unknown Machine Type";
+	}
 
 	/* Parts of the ELF binary. */
 	enum class ELF_parts: uint8_t
@@ -77,19 +144,57 @@ namespace ELF_DECODER
 		NoError			= 0x3
 	};
 
+	static uint8_t *get_ELF_error_name(ELF_errors error)
+	{
+		switch(error)
+		{
+			case ELF_errors::Invalid_ELF_Header: return (uint8_t *) "Invalid Header";break;
+			case ELF_errors::Invalid_ELF_Section: return (uint8_t *) "Invalid Section";break;
+			case ELF_errors::Invalid_ELF_SectionHT: return (uint8_t *) "Invalid Section Header Table";break;
+			case ELF_errors::NoError: return (uint8_t *) "No Error";break;
+			default: break;
+		}
+
+		return (uint8_t *) "Unknown Error";
+	}
+
+	template<typename T>
+		requires (std::is_same<T, uint16_t>::value
+			|| std::is_same<T, uint32_t>::value)
+			&& (!std::is_same<T, uint8_t>::value)
+	T revert_value(T value)
+	{
+		T old_value = value;
+		value ^= value;
+
+		switch(sizeof(T))
+		{
+			case 2: {
+				value |= (value << 0) | ((old_value >> 0) & 0xFF);
+				value = (value << 8) | ((old_value >> 8) & 0xFF);
+				break;
+			}
+			case 4: {
+				value |= (value << 0) | ((old_value >> 0) & 0xFF);
+				value = (value << 8) | ((old_value >> 8) & 0xFF);
+				value = (value << 8) | ((old_value >> 16) & 0xFF);
+				value = (value << 8) | ((old_value >> 24) & 0xFF);
+				break;
+			}
+			default: break;
+		}
+
+		return (T) value;
+	}
+
 	/* Common functionality to be found in each "step" of decoding the ELF binary file. */
 	class ElfDecoder
 	{
 	protected:
-		FILE *ELF_binary;
+		FILE *bin = nullptr;
+		uint8_t *ELF_binary = nullptr;
 		size_t seek_pos;
 		size_t backup_seek_pos;
-
-		void ELF_bin_file_is_valid()
-		{
-			ELF_ASSERT(ELF_binary,
-				"\nThe ELF binary closed unexpectedly, or an unknown error ocurred.\n")
-		}
 
 		/* Only used for `ELF_read_binary`. */
 		struct placeholder
@@ -98,11 +203,11 @@ namespace ELF_DECODER
 
 			~placeholder() = default;
 		};
-		static placeholder pholder;
+		struct placeholder *pholder = nullptr;
 
 		template<typename T = placeholder>
 			requires std::is_class<T>::value
-		uint8_t ELF_read_binary(uint8_t &bytes, uint8_t *data, T structure = pholder)
+		uint8_t ELF_read_binary(uint8_t &bytes, uint8_t *data, T &structure)
 		{
 			/* Will only read, max, 4 bytes at a time. */
 			if(bytes > 4)
@@ -112,8 +217,18 @@ namespace ELF_DECODER
 			uint8_t bytes_to_read = bytes;
 
 			if(bytes == NULL)
+			{
+				/* `nullptr` check. */
 				ELF_ASSERT(!(std::is_same<T, placeholder>::value),
 					"\nCannot read memory into a nullptr.\n")
+
+				fseek(bin, seek_pos, SEEK_SET);
+				ELF_ASSERT(fread(&structure, 1, sizeof(T), bin) == sizeof(T),
+					"\nThere was an error reading in the needed %lX (%ld) bytes.\n",
+					sizeof(T), sizeof(T))
+				
+				return NULL;
+			}
 
 			/* Make sure `data` is not `nullptr`. */
 			ELF_ASSERT(data != nullptr,
@@ -127,13 +242,19 @@ namespace ELF_DECODER
 
 			while(bytes > 0)
 			{
-				ELF_ASSERT(fread(&data[bytes], sizeof(uint8_t), 1, ELF_binary) == 1,
-					"\nThere was an error reading data from the ELF binary file.\n")
+				data[bytes] = ELF_binary[seek_pos];
 				
 				seek_pos++;
 				bytes--;
 			}
-			
+
+			/* If we are reading in only a single byte, go ahead and make sure the first index stores the value that gets read in. */
+			if(seek_pos - backup_seek_pos == 1)
+			{
+				data[0] = data[1];
+				data[1] = 0;
+			}
+
 			/* Make sure we read in the correct amount. */
 			ELF_ASSERT(seek_pos - backup_seek_pos == bytes_to_read,
 				"\nA very unknown error ocurred where the seek position did not increment by %d bytes.\n",
@@ -141,6 +262,9 @@ namespace ELF_DECODER
 			return bytes_to_read;
 		}
 
+		/* Since the above function reads in the data backwards,
+		 * this function will "correct" the data.
+		 * */
 		template<typename T>
 			requires (std::is_same<T, uint16_t>::value
 				|| std::is_same<T, uint32_t>::value)
@@ -156,43 +280,44 @@ namespace ELF_DECODER
 			reloop:
 			if(bytes_in >= sizeof(T)) goto end;
 
-			/* This should always run with `uint32_t`. This function doesn't allow
-			 * `uint64_t`, which is why the code below it should be removed.
-			 * TODO: I am lazy right now, remove the code below the if statement, thereafter remove the if statement as well and just keep
-			 * 	 the code that resides inside of it.
-			 * */
-			if((bytes_in + 2) >= sizeof(T))
-			{
-				complete_value = (complete_value << 8) | (data[2] & 0xFF);
-				complete_value = (complete_value << 8) | (data[1] & 0xFF);
-				goto end;
-			}
-
-			/* We do not need this, however I am going to keep it just to make sure. */
-			complete_value = (complete_value << 8) | (data[sizeof(T) - bytes_in] & 0xFF);
-			complete_value = (complete_value << 8) | (data[sizeof(T) - (bytes_in - 1)] & 0xFF);
-			bytes_in += 2;
-			goto reloop;
+			complete_value = (complete_value << 8) | (data[2] & 0xFF);
+			complete_value = (complete_value << 8) | (data[1] & 0xFF);
 
 			end:
 			return (T) complete_value;
 		}
 
+		template<typename T>
+			requires std::is_integral<T>::value
+				&& (!std::is_class<T>::value)
+		void check_data(T data, T data_to_expect)
+		{
+			ELF_ASSERT(data == data_to_expect,
+				"\nThe data retained (%X) did not match what was expected (%X)\n",
+				data, data_to_expect)
+		}
+
 
 	public:
 		ElfDecoder(FILE *f)
-			: ELF_binary(f), seek_pos(0), backup_seek_pos(0)
+			: bin(f), seek_pos(0), backup_seek_pos(0)
 		{
-			ELF_ASSERT(ELF_binary,
+			ELF_ASSERT(bin,
 				"\nThe ELF binary file does not exist.\n")
+			
+			fseek(bin, 0, SEEK_END);
+			size_t size = ftell(bin);
+			fseek(bin, 0, SEEK_SET);
+
+			ELF_binary = new uint8_t[size];
+			fread(ELF_binary, size, sizeof(*ELF_binary), bin);
 		}
 
-		virtual uint8_t *ELF_get_data(uint8_t length, ELF_parts part) = 0;
-		virtual ELF_errors check_data(uint8_t *data) = 0;
+		virtual void ELF_get_data(uint8_t length, ELF_parts part, uint8_t &dest) = 0;
 
 		~ElfDecoder()
 		{
-			if(ELF_binary) fclose(ELF_binary);
+			if(ELF_binary) delete ELF_binary;
 			ELF_binary = nullptr;
 		}
 	};
@@ -252,34 +377,9 @@ namespace ELF_DECODER
 			elf_header = new struct ELF_header;
 		}
 
-		uint8_t *ELF_get_data(uint8_t length, ELF_parts part) override
-		{
-			if(!(part == ELF_parts::ELF_Header))
-				return nullptr;
-
-			/* The method, per this given class, does not read memory into a structure.
-			 * Always read at least one byte.
-			 * */
-			if(length == 0)
-				length = 1;
-			
-			/* Make sure the file is valid. */
-			ELF_bin_file_is_valid();
-
-			/* Read in the data. */
-			uint8_t *data = new uint8_t[length];
-			length = ELF_read_binary(length, data);
-			
-			printf("%X\n", make_into_complete_value<uint32_t> (length, data));
-			exit(EXIT_SUCCESS);
-
-			return (uint8_t *) 0;
-		}
-
-		ELF_errors check_data(uint8_t *data) override
-		{
-			return ELF_errors::NoError;
-		}
+		void ELF_get_data(uint8_t length, ELF_parts part, uint8_t &dest) override;
+		void gather_ELF_heading();
+		struct ELF_header &get_elf_header();
 
 		template<typename T>
 			requires std::is_same<T, struct ELF_header>::value
