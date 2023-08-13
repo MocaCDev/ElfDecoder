@@ -1,0 +1,9 @@
+#TODO: !/bin/decode_elf
+
+if [ $1 == "remake" ];
+then
+	make
+	exit 0
+fi
+
+./bin/main.o $*

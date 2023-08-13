@@ -19,7 +19,8 @@ void ElfHeader::ELF_get_data(uint8_t length, ELF_parts part, uint8_t &dest)
 	length = ELF_read_binary(length, &dest, *pholder);
 }
 
-ElfHeader::ELF_header &ElfHeader::get_elf_header()
+//ElfHeader::ELF_header &ElfHeader::get_elf_header()
+void ElfHeader::get_elf_header()
 {
     uint8_t *read_in_data = nullptr;
 
@@ -195,7 +196,7 @@ ElfHeader::ELF_header &ElfHeader::get_elf_header()
         delete read_in_data;
     read_in_data = nullptr;
 
-    return *elf_header;
+    //return *elf_header;
 }
 
 /***********          END ELF HEADER          ***********/

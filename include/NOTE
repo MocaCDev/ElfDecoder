@@ -1,0 +1,8 @@
+ELF Program Header:
+    A program header table is an array of structures, each describing a segment or other information the system needs to
+    prepare the program for execution.
+    An object file segment contains one or more sections.
+    Program Headers are meaningful only for executable and shared object files.
+
+    `p_align` in `ProgramHeader`:
+        If the value is not 0 or 1, `p_align` should be a positive, integral power of 2, and `p_virtual_address` should equal `p_offset`, modulo `p_align`.
